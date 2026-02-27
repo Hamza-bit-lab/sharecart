@@ -1,0 +1,50 @@
+<?php
+
+use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\ListController;
+use App\Http\Controllers\Api\ListItemController;
+use App\Http\Controllers\SuggestionController;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
+
+// Public auth APIs
+Route::post('/auth/register', [AuthController::class, 'register']);
+Route::post('/auth/login', [AuthController::class, 'login']);
+
+// Join list by code (no login): returns list + guest access_token for that list
+Route::post('/lists/join-code', [ListController::class, 'joinByCode']);
+
+// Protected APIs (token via Sanctum)
+Route::middleware('auth:sanctum')->group(function () {
+    // Auth
+    Route::get('/auth/me', [AuthController::class, 'me']);
+    Route::post('/auth/logout', [AuthController::class, 'logout']);
+
+    // Lists (require full auth)
+    Route::get('/lists', [ListController::class, 'index']);
+    Route::post('/lists', [ListController::class, 'store']);
+    Route::match(['put', 'patch'], '/lists/{list}', [ListController::class, 'update']);
+    Route::delete('/lists/{list}', [ListController::class, 'destroy']);
+    Route::post('/lists/{list}/archive', [ListController::class, 'archive']);
+    Route::post('/lists/{list}/restore', [ListController::class, 'restore']);
+
+    // Sharing (owner only)
+    Route::post('/lists/{list}/share', [ListController::class, 'share']);
+    Route::delete('/lists/{list}/share/{user}', [ListController::class, 'unshare']);
+
+    // Suggestions
+    Route::get('/suggestions', [SuggestionController::class, 'index']);
+
+    Route::get('/user', function (Request $request) {
+        return $request->user();
+    });
+});
+
+// List view + items + reset: allow Sanctum user OR guest token (from join-code)
+Route::middleware('list.access.api')->group(function () {
+    Route::get('/lists/{list}', [ListController::class, 'show']);
+    Route::post('/lists/{list}/reset-items', [ListController::class, 'resetItems']);
+    Route::post('/lists/{list}/items', [ListItemController::class, 'store']);
+    Route::match(['put', 'patch'], '/lists/{list}/items/{item}', [ListItemController::class, 'update']);
+    Route::delete('/lists/{list}/items/{item}', [ListItemController::class, 'destroy']);
+});
