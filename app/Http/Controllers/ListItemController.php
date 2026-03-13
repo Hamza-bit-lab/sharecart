@@ -63,6 +63,7 @@ class ListItemController extends Controller
             }
         }
         $item->update($data);
+        $list->fresh()->checkAndAutoArchive();
 
         return redirect()->back()->with('success', 'Item updated.');
     }
@@ -82,5 +83,56 @@ class ListItemController extends Controller
         $item->delete();
 
         return redirect()->back()->with('success', 'Item removed.');
+    }
+
+    /**
+     * Claim an item ("I'll buy this").
+     */
+    public function claim(Request $request, GroceryList $list, ListItem $item): RedirectResponse
+    {
+        if ($item->list_id !== $list->id) {
+            abort(404);
+        }
+
+        if ($request->user()) {
+            $this->authorize('update', $item);
+            $item->update([
+                'claimed_by_user_id' => $request->user()->id,
+                'claimed_by_name' => null,
+                'claimed_at' => now(),
+            ]);
+        } else {
+            $guestNames = $request->session()->get('guest_names', []);
+            $displayName = $guestNames[$list->id] ?? 'Guest';
+            $item->update([
+                'claimed_by_user_id' => null,
+                'claimed_by_name' => $displayName,
+                'claimed_at' => now(),
+            ]);
+        }
+
+        return redirect()->back()->with('success', 'Item claimed.');
+    }
+
+    /**
+     * Unclaim an item.
+     */
+    public function unclaim(Request $request, GroceryList $list, ListItem $item): RedirectResponse
+    {
+        if ($item->list_id !== $list->id) {
+            abort(404);
+        }
+
+        if ($request->user()) {
+            $this->authorize('update', $item);
+        }
+
+        $item->update([
+            'claimed_by_user_id' => null,
+            'claimed_by_name' => null,
+            'claimed_at' => null,
+        ]);
+
+        return redirect()->back()->with('success', 'Item unclaimed.');
     }
 }

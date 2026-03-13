@@ -36,16 +36,52 @@
                                         <input type="checkbox" class="form-check-input item-toggle flex-shrink-0" {{ $item->completed ? 'checked' : '' }} title="Toggle purchased" onchange="this.form.submit()">
                                         <span class="{{ $item->completed ? 'text-decoration-line-through text-muted' : '' }} text-truncate small">
                                             {{ $item->name }}{{ $item->quantity > 1 ? ' × ' . $item->quantity : '' }}
-                                            @if ($item->completed && $item->completedBy)
-                                                <span class="d-block very-small text-muted">(by {{ $item->completedBy->name }})</span>
+                                            
+                                            @if ($item->completed)
+                                                @php
+                                                    $completedByName = $item->completedBy->name ?? $item->completed_by_name;
+                                                @endphp
+                                                @if ($completedByName)
+                                                    <span class="d-block very-small text-muted">(purchased by {{ $completedByName }})</span>
+                                                @endif
+                                            @elseif ($item->claimed_by_user_id || $item->claimed_by_name)
+                                                @php
+                                                    $claimedByName = $item->claimedByUser->name ?? $item->claimed_by_name;
+                                                @endphp
+                                                <span class="d-block very-small text-primary fw-semibold">
+                                                    <i class="bi bi-person-check me-1"></i>{{ $claimedByName }} will buy this
+                                                </span>
                                             @endif
                                         </span>
                                     </form>
-                                    <form action="{{ route('lists.items.destroy', [$item->groceryList, $item]) }}" method="POST" class="d-inline flex-shrink-0 swal-confirm" data-swal-title="Remove this item?" data-swal-text="This item will be removed from the list.">
-                                        @csrf
-                                        @method('DELETE')
-                                        <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-1" title="Remove">×</button>
-                                    </form>
+                                    
+                                    <div class="d-flex align-items-center gap-1 flex-shrink-0">
+                                        @if (!$item->completed)
+                                            @if ($item->claimed_by_user_id || $item->claimed_by_name)
+                                                {{-- Unclaim Button --}}
+                                                <form action="{{ route('lists.items.unclaim', [$item->groceryList, $item]) }}" method="POST">
+                                                    @csrf
+                                                    <button type="submit" class="btn btn-sm btn-link text-muted p-0 very-small text-decoration-none" title="Unclaim">
+                                                        <i class="bi bi-x-circle"></i>
+                                                    </button>
+                                                </form>
+                                            @else
+                                                {{-- Claim Button --}}
+                                                <form action="{{ route('lists.items.claim', [$item->groceryList, $item]) }}" method="POST">
+                                                    @csrf
+                                                    <button type="submit" class="btn btn-sm btn-outline-primary py-0 px-2 rounded-pill very-small fw-bold">
+                                                        Claim
+                                                    </button>
+                                                </form>
+                                            @endif
+                                        @endif
+
+                                        <form action="{{ route('lists.items.destroy', [$item->groceryList, $item]) }}" method="POST" class="d-inline swal-confirm" data-swal-title="Remove this item?" data-swal-text="This item will be removed from the list.">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-1 border-0" title="Remove">×</button>
+                                        </form>
+                                    </div>
                                 </div>
                             </div>
                         @endforeach

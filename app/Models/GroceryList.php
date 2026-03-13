@@ -18,6 +18,12 @@ class GroceryList extends Model
 
     protected $table = 'lists';
 
+    public const RECOMMENDED_ICONS = [
+        'bi-cart4', 'bi-house-heart', 'bi-balloon-heart', 'bi-cup-hot', 'bi-apple', 
+        'bi-droplet', 'bi-paw', 'bi-cup-straw', 'bi-pie-chart', 'bi-egg-fried', 
+        'bi-box2-heart', 'bi-snow', 'bi-bandaid', 'bi-gift', 'bi-basket3'
+    ];
+
     protected $fillable = [
         'user_id',
         'name',
@@ -25,7 +31,19 @@ class GroceryList extends Model
         'archived_at',
         'invite_token',
         'join_code',
+        'last_ping_at',
+        'last_ping_by_id',
+        'last_ping_by_name',
+        'icon',
     ];
+
+    /**
+     * Get the list icon or a default one.
+     */
+    public function getIconAttribute($value): string
+    {
+        return $value ?: 'bi-cart4';
+    }
 
     public static function generateUniqueJoinCode(): string
     {
@@ -39,6 +57,7 @@ class GroceryList extends Model
     protected $casts = [
         'due_date' => 'date',
         'archived_at' => 'datetime',
+        'last_ping_at' => 'datetime',
     ];
 
     public function scopeActive($query)
@@ -83,6 +102,14 @@ class GroceryList extends Model
     }
 
     /**
+     * User who sent the last ping.
+     */
+    public function lastPingBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'last_ping_by_id');
+    }
+
+    /**
      * Users with whom this list is shared (excluding owner).
      * Pivot table list_user uses list_id (not grocery_list_id) because our table is "lists".
      */
@@ -97,6 +124,31 @@ class GroceryList extends Model
      */
     public function items(): HasMany
     {
-        return $this->hasMany(ListItem::class, 'list_id')->orderBy('created_at');
+        return $this->hasMany(ListItem::class, 'list_id')->orderBy('position');
+    }
+
+    /**
+     * Automatically archives the list if all items are completed.
+     * Only triggers if there is at least one item.
+     */
+    public function checkAndAutoArchive(): void
+    {
+        if ($this->isArchived()) {
+            return;
+        }
+
+        $items = $this->items;
+
+        if ($items->isNotEmpty() && $items->every(fn($item) => $item->completed)) {
+            $this->update(['archived_at' => now()]);
+        }
+    }
+
+    /**
+     * Payments made for this list.
+     */
+    public function payments(): HasMany
+    {
+        return $this->hasMany(ListPayment::class, 'list_id')->orderBy('paid_at', 'desc');
     }
 }

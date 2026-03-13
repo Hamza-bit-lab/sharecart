@@ -22,6 +22,7 @@ class StoreGroceryListRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:255'],
             'due_date' => ['nullable', 'date', 'after_or_equal:today'],
+            'icon' => ['nullable', 'string', 'max:10'],
         ];
     }
 

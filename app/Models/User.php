@@ -66,6 +66,11 @@ class User extends Authenticatable
             ->withTimestamps();
     }
 
+    public function payments(): HasMany
+    {
+        return $this->hasMany(ListPayment::class);
+    }
+
     /**
      * All lists the user can access (owned + shared).
      */
@@ -76,5 +81,18 @@ class User extends Authenticatable
         return GroceryList::query()
             ->where('user_id', $this->id)
             ->orWhereIn('id', $shared->pluck('lists.id'));
+    }
+
+    public function templates(): HasMany
+    {
+        return $this->hasMany(Template::class);
+    }
+
+    /**
+     * FCM tokens for this user.
+     */
+    public function fcmTokens(): HasMany
+    {
+        return $this->hasMany(FcmToken::class);
     }
 }

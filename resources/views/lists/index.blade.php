@@ -58,6 +58,7 @@
                         <div class="card sharecart-card h-100">
                             <div class="card-body d-flex flex-column">
                                 <h5 class="card-title mb-1">
+                                    <i class="bi {{ $list->icon }} me-1 text-primary"></i>
                                     <a href="{{ route('lists.show', $list) }}" class="text-decoration-none">{{ $list->name }}</a>
                                 </h5>
                                 <p class="card-text text-muted small mb-3">
@@ -103,6 +104,7 @@
                         <div class="card sharecart-card h-100">
                             <div class="card-body d-flex flex-column">
                                 <h5 class="card-title mb-1 text-muted">
+                                    <i class="bi {{ $list->icon }} me-1"></i>
                                     {{ $list->name }}
                                 </h5>
                                 <p class="card-text text-muted small mb-3">

@@ -5,6 +5,8 @@ use App\Http\Controllers\ListItemController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ListPollController;
 use App\Http\Controllers\SuggestionController;
+use App\Http\Controllers\TemplateController;
+use App\Http\Controllers\ListPaymentController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -41,6 +43,12 @@ Route::middleware('auth')->group(function () {
 
     // Suggestions (common items from all lists)
     Route::get('/suggestions', [SuggestionController::class, 'index'])->name('suggestions.index');
+
+    // Templates
+    Route::get('/templates', [TemplateController::class, 'index'])->name('templates.index');
+    Route::post('/templates', [TemplateController::class, 'store'])->name('templates.store');
+    Route::delete('/templates/{template}', [TemplateController::class, 'destroy'])->name('templates.destroy');
+    Route::post('/templates/{template}/apply/{list}', [TemplateController::class, 'apply'])->name('templates.apply');
 });
 
 // List view + items + poll: allowed for auth (policy) or guest (joined by code in session)
@@ -51,7 +59,16 @@ Route::middleware('list.access')->group(function () {
     Route::get('/lists/{list}/poll', [ListPollController::class, 'show'])->name('lists.poll');
     Route::post('/lists/{list}/items', [ListItemController::class, 'store'])->name('lists.items.store');
     Route::put('/lists/{list}/items/{item}', [ListItemController::class, 'update'])->name('lists.items.update');
+    Route::post('/lists/{list}/items/{item}/claim', [ListItemController::class, 'claim'])->name('lists.items.claim');
+    Route::post('/lists/{list}/items/{item}/unclaim', [ListItemController::class, 'unclaim'])->name('lists.items.unclaim');
     Route::delete('/lists/{list}/items/{item}', [ListItemController::class, 'destroy'])->name('lists.items.destroy');
+
+    Route::post('/lists/{list}/ping', [GroceryListController::class, 'ping'])->name('lists.ping');
+
+    // Payments
+    Route::post('/lists/{list}/payments', [ListPaymentController::class, 'store'])->name('lists.payments.store');
+    Route::match(['put', 'patch'], '/lists/{list}/payments/{payment}', [ListPaymentController::class, 'update'])->name('lists.payments.update');
+    Route::delete('/lists/{list}/payments/{payment}', [ListPaymentController::class, 'destroy'])->name('lists.payments.destroy');
 });
 
 require __DIR__.'/auth.php';

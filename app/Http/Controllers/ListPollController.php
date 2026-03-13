@@ -37,6 +37,8 @@ class ListPollController extends Controller
                 'id' => $list->id,
                 'name' => $list->name,
                 'updated_at' => $list->updated_at->toIso8601String(),
+                'last_ping_at' => $list->last_ping_at ? $list->last_ping_at->toIso8601String() : null,
+                'last_ping_by_name' => $list->last_ping_by_name,
             ],
             'items' => $items->map(fn ($item) => [
                 'id' => $item->id,

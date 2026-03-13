@@ -22,6 +22,7 @@ class UpdateGroceryListRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:255'],
             'due_date' => ['nullable', 'date'],
+            'icon' => ['nullable', 'string', 'max:10'],
         ];
     }
 }

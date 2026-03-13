@@ -21,11 +21,16 @@ class ListItem extends Model
         'completed_by',
         'completed_at',
         'completed_by_name',
+        'position',
+        'claimed_by_user_id',
+        'claimed_by_name',
+        'claimed_at',
     ];
 
     protected $casts = [
         'completed' => 'boolean',
         'completed_at' => 'datetime',
+        'claimed_at' => 'datetime',
     ];
 
     /**
@@ -42,5 +47,13 @@ class ListItem extends Model
     public function completedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'completed_by');
+    }
+
+    /**
+     * The user who claimed this item (if any).
+     */
+    public function claimedByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'claimed_by_user_id');
     }
 }

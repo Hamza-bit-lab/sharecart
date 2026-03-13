@@ -8,6 +8,8 @@ use App\Http\Requests\UpdateGroceryListRequest;
 use App\Models\GroceryList;
 use App\Models\ListGuestToken;
 use App\Models\User;
+use App\Models\FcmToken;
+use App\Services\FcmService;
 use App\Services\SuggestionCategories;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -19,6 +21,12 @@ use Illuminate\View\View;
  */
 class GroceryListController extends Controller
 {
+    protected $fcmService;
+
+    public function __construct(FcmService $fcmService)
+    {
+        $this->fcmService = $fcmService;
+    }
     /**
      * List all lists the user can access (owned + shared). Supports active vs archived tab.
      */
@@ -118,7 +126,107 @@ class GroceryListController extends Controller
             ->unique()
             ->values();
 
-        return view('lists.show', compact('list', 'groupedItems', 'allItemsPurchased', 'sort', 'inviteLink', 'joinCode', 'guestName', 'guestCollaborators'));
+        // Fetch System/Global Templates (user_id is NULL)
+        $templates = \App\Models\Template::whereNull('user_id')->withCount('items')->get();
+
+        // Settlement Calculation
+        $payments = $list->payments()->with('user')->get();
+        $totalSpent = $payments->sum('amount');
+        
+        $participants = [];
+        // Add Owner
+        $participants[$list->user->id] = [
+            'name' => $list->user->name,
+            'is_user' => true,
+            'spent' => 0
+        ];
+        // Add Shared Users
+        foreach ($list->sharedWith as $u) {
+            $participants[$u->id] = [
+                'name' => $u->name,
+                'is_user' => true,
+                'spent' => 0
+            ];
+        }
+        
+        // Track guest spending and identities
+        foreach ($payments as $p) {
+            if ($p->user_id) {
+                if (isset($participants[$p->user_id])) {
+                    $participants[$p->user_id]['spent'] += $p->amount;
+                }
+            } else {
+                $guestKey = 'guest_' . $p->guest_name;
+                if (!isset($participants[$guestKey])) {
+                    $participants[$guestKey] = [
+                        'name' => $p->guest_name,
+                        'is_user' => false,
+                        'spent' => 0
+                    ];
+                }
+                $participants[$guestKey]['spent'] += $p->amount;
+            }
+        }
+        
+        $participantCount = count($participants);
+        $fairShare = $participantCount > 0 ? $totalSpent / $participantCount : 0;
+        
+        foreach ($participants as $key => &$p) {
+            $p['balance'] = $p['spent'] - $fairShare;
+        }
+
+        return view('lists.show', compact(
+            'list', 'groupedItems', 'allItemsPurchased', 'sort', 
+            'inviteLink', 'joinCode', 'guestName', 'guestCollaborators', 
+            'templates', 'totalSpent', 'participants', 'fairShare'
+        ));
+    }
+
+    /**
+     * Nudge other collaborators (send a ping).
+     */
+    public function ping(Request $request, GroceryList $list): RedirectResponse
+    {
+        if ($request->user()) {
+            $this->authorize('update', $list);
+            $list->update([
+                'last_ping_at' => now(),
+                'last_ping_by_id' => $request->user()->id,
+                'last_ping_by_name' => $request->user()->name,
+            ]);
+        } else {
+            // Guest ping
+            $guestNames = $request->session()->get('guest_names', []);
+            $name = $guestNames[$list->id] ?? 'Guest';
+            $list->update([
+                'last_ping_at' => now(),
+                'last_ping_by_id' => null,
+                'last_ping_by_name' => $name,
+            ]);
+        }
+        $name = $request->user() ? $request->user()->name : ($list->last_ping_by_name ?: 'Someone');
+         
+         // Notify all other members
+         $tokens = FcmToken::query()
+             ->where(function($query) use ($list) {
+                 $query->whereIn('user_id', function($q) use ($list) {
+                     $q->select('user_id')->from('list_user')->where('list_id', $list->id);
+                 })->orWhere('user_id', $list->user_id);
+             })
+             ->where('user_id', '!=', $request->user() ? $request->user()->id : null)
+             ->pluck('token')
+             ->toArray();
+ 
+         if (!empty($tokens)) {
+             $this->fcmService->sendToMany(
+                 $tokens,
+                 "Nudge!",
+                 "{$name} nudged the list {$list->name}",
+                 ['list_id' => $list->id, 'type' => 'nudge']
+             );
+         }
+ 
+         return redirect()->back()->with('success', 'Nudge sent to everyone!');
     }
 
     /**
@@ -181,8 +289,16 @@ class GroceryListController extends Controller
                 return redirect()->route('lists.show', $list)->with('success', 'You own this list.');
             }
             $list->sharedWith()->syncWithoutDetaching([$request->user()->id]);
-
-            return redirect()->route('lists.show', $list)->with('success', 'You have been added to this list.');
+ 
+             // Notify the list owner
+             $this->fcmService->sendToUser(
+                 $list->user,
+                 "Someone joined your list",
+                 "{$request->user()->name} joined your list {$list->name} via code",
+                 ['list_id' => $list->id, 'type' => 'user_joined']
+             );
+ 
+             return redirect()->route('lists.show', $list)->with('success', 'You have been added to this list.');
         }
 
         $ids = session('guest_list_ids', []);
@@ -215,8 +331,16 @@ class GroceryListController extends Controller
         }
 
         $list->sharedWith()->syncWithoutDetaching([$user->id]);
-
-        return redirect()->route('lists.show', $list)->with('success', 'You have been added to this list.');
+ 
+         // Notify the list owner
+         $this->fcmService->sendToUser(
+             $list->user,
+             "Someone joined your list",
+             "{$user->name} joined your list {$list->name} via invite",
+             ['list_id' => $list->id, 'type' => 'user_joined']
+         );
+ 
+         return redirect()->route('lists.show', $list)->with('success', 'You have been added to this list.');
     }
 
     /**
@@ -304,8 +428,16 @@ class GroceryListController extends Controller
     {
         $user = User::where('email', $request->validated('email'))->firstOrFail();
         $list->sharedWith()->syncWithoutDetaching([$user->id]);
-
-        return redirect()->back()->with('success', 'List shared with ' . $user->email . '.');
+ 
+         // Notify the added user
+         $this->fcmService->sendToUser(
+             $user,
+             "Added to list",
+             "{$request->user()->name} added you to list {$list->name}",
+             ['list_id' => $list->id, 'type' => 'added_to_list']
+         );
+ 
+         return redirect()->back()->with('success', 'List shared with ' . $user->email . '.');
     }
 
   
