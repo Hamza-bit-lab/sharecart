@@ -47,6 +47,15 @@
                         </a>
                     @endcan
                 @endauth
+                
+                @if ((auth()->check() && auth()->id() !== $list->user_id) || (!auth()->check() && session()->has('guest_token_' . $list->id)))
+                    <form action="{{ route('lists.leave', $list) }}" method="POST" class="d-inline swal-confirm" data-swal-title="Leave list?" data-swal-text="Are you sure you want to leave this list?">
+                        @csrf
+                        <button type="submit" class="btn btn-outline-danger shadow-sm bg-white btn-sm px-3 py-2 rounded-pill hover-elevate" title="Leave List">
+                            <i class="bi bi-box-arrow-right me-1"></i> Leave
+                        </button>
+                    </form>
+                @endif
                 <a href="{{ auth()->check() ? route('lists.index') : route('join') }}" class="btn btn-dark shadow-sm btn-sm px-3 py-2 rounded-pill hover-elevate">
                     <i class="bi bi-arrow-left me-1"></i> Back
                 </a>

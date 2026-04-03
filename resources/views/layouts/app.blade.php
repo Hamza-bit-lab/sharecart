@@ -107,7 +107,14 @@
     </main>
 
     <footer class="py-3 mt-auto sharecart-footer">
-        <div class="container small text-center">ShareCart – shared grocery lists</div>
+        <div class="container small text-center">
+            <div class="mb-2">ShareCart – shared grocery lists</div>
+            <div class="text-muted">
+                <a href="{{ route('faq') }}" class="text-decoration-none text-muted me-3">FAQs</a>
+                <a href="{{ route('terms') }}" class="text-decoration-none text-muted me-3">Terms & Conditions</a>
+                <a href="{{ route('privacy') }}" class="text-decoration-none text-muted">Privacy Policy</a>
+            </div>
+        </div>
     </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>

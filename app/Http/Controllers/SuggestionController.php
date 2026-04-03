@@ -35,4 +35,47 @@ class SuggestionController extends Controller
             'data' => ['suggestions' => $suggestions],
         ]);
     }
+
+    /**
+     * Predictive suggestions based on the user's past habits.
+     */
+    public function predictiveSuggestions(Request $request, \App\Models\GroceryList $list): JsonResponse
+    {
+        $userId = $request->user()?->id;
+
+        if (!$userId) {
+            return response()->json([
+                'success' => true,
+                'data' => ['suggestions' => []],
+            ]);
+        }
+
+        $currentListNames = $list->items()->pluck('name')->map(fn($name) => strtolower(trim($name)))->toArray();
+
+        $frequentItems = \App\Models\ListItem::whereHas('groceryList', function($q) use ($userId) {
+            $q->where('user_id', $userId)
+              ->orWhereHas('sharedWith', function($sq) use ($userId) {
+                  $sq->where('users.id', $userId);
+              });
+        })
+        ->where('created_at', '>=', now()->subDays(60))
+        ->select('name')
+        ->selectRaw('COUNT(*) as count')
+        ->groupBy('name')
+        ->orderBy('count', 'desc')
+        ->limit(20)
+        ->get()
+        ->pluck('name')
+        ->reject(function ($name) use ($currentListNames) {
+            return in_array(strtolower(trim($name)), $currentListNames);
+        })
+        ->take(5)
+        ->values()
+        ->toArray();
+
+        return response()->json([
+            'success' => true,
+            'data' => ['suggestions' => $frequentItems],
+        ]);
+    }
 }

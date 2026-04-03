@@ -24,6 +24,11 @@ Route::get('/lists/join/{token}', [GroceryListController::class, 'joinByInvite']
 Route::get('/join', [GroceryListController::class, 'joinByCodeForm'])->name('join');
 Route::post('/join', [GroceryListController::class, 'joinByCode'])->name('join.submit');
 
+// Legal and Info Pages (public)
+Route::get('/privacy-policy', [\App\Http\Controllers\PageController::class, 'privacy'])->name('privacy');
+Route::get('/terms-and-conditions', [\App\Http\Controllers\PageController::class, 'terms'])->name('terms');
+Route::get('/faqs', [\App\Http\Controllers\PageController::class, 'faq'])->name('faq');
+
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
@@ -55,6 +60,7 @@ Route::middleware('auth')->group(function () {
 Route::middleware('list.access')->group(function () {
     Route::get('/lists/{list}', [GroceryListController::class, 'show'])->name('lists.show');
     Route::post('/lists/{list}/guest-name', [GroceryListController::class, 'setGuestName'])->name('lists.guest-name');
+    Route::post('/lists/{list}/leave', [GroceryListController::class, 'leave'])->name('lists.leave');
     Route::post('/lists/{list}/reset-items', [GroceryListController::class, 'resetItems'])->name('lists.reset-items');
     Route::get('/lists/{list}/poll', [ListPollController::class, 'show'])->name('lists.poll');
     Route::post('/lists/{list}/items', [ListItemController::class, 'store'])->name('lists.items.store');

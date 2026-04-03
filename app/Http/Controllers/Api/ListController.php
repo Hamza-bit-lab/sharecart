@@ -21,9 +21,6 @@ class ListController extends Controller
     {
         $this->fcmService = $fcmService;
     }
-    /**
-     * Get the list of recommended icons/classes for lists.
-     */
     public function icons(): JsonResponse
     {
         return response()->json([
@@ -94,10 +91,6 @@ class ListController extends Controller
         ], 201);
     }
 
-    /**
-     * Show a single list with items and collaborators.
-     * Allowed for Sanctum user (policy) or guest token (list-scoped).
-     */
     public function show(Request $request, GroceryList $list): JsonResponse
     {
         if ($request->user()) {
@@ -137,60 +130,65 @@ class ListController extends Controller
         ]);
     }
 
-    /**
-     * Archive a list.
-     */
     public function archive(Request $request, GroceryList $list): JsonResponse
     {
         $this->authorize('update', $list);
-
         $list->update(['archived_at' => now()]);
 
         return response()->json([
             'success' => true,
             'message' => 'List archived.',
-            'data' => [
-                'list' => $this->serializeListSummary($list->fresh()),
-            ],
+            'data' => ['list' => $this->serializeListSummary($list->fresh())],
         ]);
     }
 
-    /**
-     * Restore an archived list.
-     */
     public function restore(Request $request, GroceryList $list): JsonResponse
     {
         $this->authorize('update', $list);
-
         $list->update(['archived_at' => null]);
 
         return response()->json([
             'success' => true,
             'message' => 'List restored.',
-            'data' => [
-                'list' => $this->serializeListSummary($list->fresh()),
-            ],
+            'data' => ['list' => $this->serializeListSummary($list->fresh())],
         ]);
     }
 
-    /**
-     * Delete a list (owner only).
-     */
     public function destroy(Request $request, GroceryList $list): JsonResponse
     {
         $this->authorize('delete', $list);
-
         $list->delete();
 
-        return response()->json([
-            'message' => 'List deleted.',
-        ]);
+        return response()->json(['message' => 'List deleted.']);
     }
 
     /**
-     * Reset all items on a list (uncheck all).
-     * Allowed for Sanctum user or guest token.
+     * Leave a shared list (for non-owners).
      */
+    public function leave(Request $request, GroceryList $list): JsonResponse
+    {
+        if ($request->user()) {
+            if ($list->user_id === $request->user()->id) {
+                return ApiResponse::error('Owner cannot leave the list.', 403);
+            }
+            $list->sharedWith()->detach($request->user()->id);
+        } else {
+            // Guest leaving
+            $tokenStr = $request->bearerToken();
+            if ($tokenStr) {
+                $tokenRecord = \App\Models\ListGuestToken::findValidByPlainToken($tokenStr);
+                if ($tokenRecord && $tokenRecord->list_id === $list->id) {
+                    $tokenRecord->delete();
+                }
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Left list.',
+        ]);
+    }
+
     public function resetItems(Request $request, GroceryList $list): JsonResponse
     {
         if ($request->user()) {
@@ -207,9 +205,7 @@ class ListController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'List reset.',
-            'data' => [
-                'list' => $this->serializeListDetail($list->fresh(['items' => ['completedBy'], 'sharedWith', 'user'])),
-            ],
+            'data' => ['list' => $this->serializeListDetail($list->fresh(['items' => ['completedBy'], 'sharedWith', 'user']))],
         ]);
     }
 
@@ -260,9 +256,6 @@ class ListController extends Controller
         ]);
     }
 
-    /**
-     * Remove a collaborator from a list.
-     */
     public function unshare(Request $request, GroceryList $list, User $user): JsonResponse
     {
         $this->authorize('share', $list);
@@ -279,11 +272,6 @@ class ListController extends Controller
         ]);
     }
 
-    /**
-     * Join a list using its 5-digit join_code.
-     * No login required: send only the code to get list + guest access_token for that list.
-     * With login (Bearer token): adds you as collaborator and returns list (no guest token).
-     */
     public function joinByCode(Request $request): JsonResponse
     {
         $data = $request->validate([
@@ -301,9 +289,18 @@ class ListController extends Controller
 
         $list->load(['items' => ['completedBy'], 'sharedWith', 'user']);
 
-        // Logged-in user: add as collaborator (or confirm owner)
-        if ($request->user()) {
-            $user = $request->user();
+        $user = null;
+        if ($request->bearerToken()) {
+            $user = auth('sanctum')->user();
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthenticated.'
+                ], 401);
+            }
+        }
+
+        if ($user) {
             if ($list->user_id === $user->id) {
                 return response()->json([
                     'success' => true,
@@ -329,7 +326,6 @@ class ListController extends Controller
             ]);
         }
 
-        // Guest (no login): issue a list-scoped token so client can call list/item APIs without account
         $accessToken = ListGuestToken::createToken($list, 30, $data['name'] ?? null);
         $expiresAt = now()->addDays(30)->toIso8601String();
 
@@ -345,9 +341,6 @@ class ListController extends Controller
         ]);
     }
 
-    /**
-     * Nudge other collaborators (send a ping).
-     */
     public function ping(Request $request, GroceryList $list): JsonResponse
     {
         if ($request->user()) {
@@ -371,14 +364,21 @@ class ListController extends Controller
         $name = $request->user() ? $request->user()->name : ($list->last_ping_by_name ?: 'Someone');
          
         // Notify all other members
-        $tokens = FcmToken::query()
+        $query = FcmToken::query()
             ->where(function($query) use ($list) {
                 $query->whereIn('user_id', function($q) use ($list) {
                     $q->select('user_id')->from('list_user')->where('list_id', $list->id);
                 })->orWhere('user_id', $list->user_id);
-            })
-            ->where('user_id', '!=', $request->user() ? $request->user()->id : null)
-            ->pluck('token')
+            });
+            
+        if ($user = $request->user()) {
+            $query->where('user_id', '!=', $user->id);
+        }
+
+        $tokens = $query->pluck('token')
+            ->filter(fn($token) => !empty($token))
+            ->unique()
+            ->values()
             ->toArray();
  
         if (!empty($tokens)) {
@@ -400,9 +400,6 @@ class ListController extends Controller
         ]);
     }
 
-    /**
-     * Get detailed settlement data.
-     */
     public function settlement(Request $request, GroceryList $list): JsonResponse
     {
         if ($request->user()) {

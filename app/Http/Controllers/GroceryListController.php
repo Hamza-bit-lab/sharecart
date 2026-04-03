@@ -43,17 +43,11 @@ class GroceryListController extends Controller
         return view('lists.index', compact('activeLists', 'archivedLists'));
     }
 
-    /**
-     * Show form to create a new list.
-     */
     public function create(): View
     {
         return view('lists.create');
     }
 
-    /**
-     * Store a new list.
-     */
     public function store(StoreGroceryListRequest $request): RedirectResponse
     {
         $data = $request->validated();
@@ -207,14 +201,21 @@ class GroceryListController extends Controller
         $name = $request->user() ? $request->user()->name : ($list->last_ping_by_name ?: 'Someone');
          
          // Notify all other members
-         $tokens = FcmToken::query()
+         $query = FcmToken::query()
              ->where(function($query) use ($list) {
                  $query->whereIn('user_id', function($q) use ($list) {
                      $q->select('user_id')->from('list_user')->where('list_id', $list->id);
                  })->orWhere('user_id', $list->user_id);
-             })
-             ->where('user_id', '!=', $request->user() ? $request->user()->id : null)
-             ->pluck('token')
+             });
+             
+         if ($user = $request->user()) {
+             $query->where('user_id', '!=', $user->id);
+         }
+
+         $tokens = $query->pluck('token')
+             ->filter(fn($token) => !empty($token))
+             ->unique()
+             ->values()
              ->toArray();
  
          if (!empty($tokens)) {
@@ -263,9 +264,6 @@ class GroceryListController extends Controller
         return redirect()->route('lists.show', $list)->with('success', 'Name saved. You’ll show up in the list’s collaborators.');
     }
 
-    /**
-     * Show form to join a list by 5-digit code (public, no login).
-     */
     public function joinByCodeForm(): View
     {
         return view('lists.join-by-code');
@@ -361,9 +359,6 @@ class GroceryListController extends Controller
         return redirect()->back()->with('success', 'List reset. Ready for your next trip!');
     }
 
-    /**
-     * Show form to edit list name.
-     */
     public function edit(Request $request, GroceryList $list): View|RedirectResponse
     {
         $this->authorize('update', $list);
@@ -371,9 +366,6 @@ class GroceryListController extends Controller
         return view('lists.edit', compact('list'));
     }
 
-    /**
-     * Update list name.
-     */
     public function update(UpdateGroceryListRequest $request, GroceryList $list): RedirectResponse
     {
         $list->update($request->validated());
@@ -382,39 +374,25 @@ class GroceryListController extends Controller
             ->with('success', 'List updated.');
     }
 
-    /**
-     * Archive the list (move to archived). Requires update permission.
-     */
     public function archive(Request $request, GroceryList $list): RedirectResponse
     {
         $this->authorize('update', $list);
-
         $list->update(['archived_at' => now()]);
 
-        return redirect()->route('lists.index')
-            ->with('success', 'List archived.');
+        return redirect()->route('lists.index')->with('success', 'List archived.');
     }
 
-    /**
-     * Restore an archived list. Requires update permission.
-     */
     public function restore(Request $request, GroceryList $list): RedirectResponse
     {
         $this->authorize('update', $list);
-
         $list->update(['archived_at' => null]);
 
-        return redirect()->route('lists.index')
-            ->with('success', 'List restored.');
+        return redirect()->route('lists.index')->with('success', 'List restored.');
     }
 
-    /**
-     * Delete the list (owner only).
-     */
     public function destroy(Request $request, GroceryList $list): RedirectResponse
     {
         $this->authorize('delete', $list);
-
         $list->delete();
 
         return redirect()->route('lists.index', ['tab' => 'archived'])
@@ -450,5 +428,35 @@ class GroceryListController extends Controller
         $list->sharedWith()->detach($user->id);
 
         return redirect()->back()->with('success', 'Access removed.');
+    }
+
+    /**
+     * Leave a shared list (for non-owners).
+     */
+    public function leave(Request $request, GroceryList $list): RedirectResponse
+    {
+        if ($request->user()) {
+            if ($list->user_id === $request->user()->id) {
+                return redirect()->back()->with('error', 'You cannot leave a list you own. Delete it instead.');
+            }
+            $list->sharedWith()->detach($request->user()->id);
+            return redirect()->route('lists.index')->with('success', 'You have left the list.');
+        } else {
+            // Guest leaving
+            $guestTokenStr = $request->session()->get('guest_token_' . $list->id);
+            if ($guestTokenStr) {
+                $tokenRecord = \App\Models\ListGuestToken::findValidByPlainToken($guestTokenStr);
+                if ($tokenRecord && $tokenRecord->list_id === $list->id) {
+                    $tokenRecord->delete();
+                }
+                $request->session()->forget('guest_token_' . $list->id);
+                $guestNames = $request->session()->get('guest_names', []);
+                if (isset($guestNames[$list->id])) {
+                    unset($guestNames[$list->id]);
+                    $request->session()->put('guest_names', $guestNames);
+                }
+            }
+            return redirect()->route('join')->with('success', 'You have left the list.');
+        }
     }
 }

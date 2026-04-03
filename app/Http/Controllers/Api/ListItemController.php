@@ -170,6 +170,56 @@ class ListItemController extends Controller
     }
 
     /**
+     * Toggle out of stock status for an item.
+     */
+    public function toggleOutOfStock(Request $request, GroceryList $list, ListItem $item, \App\Services\FcmService $fcmService): JsonResponse
+    {
+        if ($item->list_id !== $list->id) {
+            return ApiResponse::error('Item does not belong to this list.', 404);
+        }
+
+        if ($request->user()) {
+            $this->authorize('update', $item);
+            $userName = $request->user()->name;
+        } else {
+            $userName = $request->attributes->get('guest_display_name') ?? 'Guest';
+        }
+
+        $item->update([
+            'is_out_of_stock' => !$item->is_out_of_stock,
+        ]);
+
+        if ($item->is_out_of_stock) {
+            // Notify list members
+            $userIds = $list->sharedWith()->pluck('users.id')->merge([$list->user_id])->unique();
+            if ($request->user()) {
+                $userIds = $userIds->reject(fn($id) => $id === $request->user()->id);
+            }
+
+            $usersToNotify = \App\Models\User::whereIn('id', $userIds)->get();
+
+            $title = "Item Out of Stock";
+            $body = "{$userName} marked '{$item->name}' as out of stock in {$list->name}.";
+
+            foreach ($usersToNotify as $user) {
+                $fcmService->sendToUser($user, $title, $body, [
+                    'type' => 'item_out_of_stock',
+                    'list_id' => (string) $list->id,
+                    'item_id' => (string) $item->id,
+                ]);
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Status updated.',
+            'data' => [
+                'item' => $this->serializeItem($item->fresh()),
+            ],
+        ]);
+    }
+
+    /**
      * Reorder items in a list.
      */
     public function reorder(Request $request, GroceryList $list): JsonResponse
@@ -234,6 +284,7 @@ class ListItemController extends Controller
             'name' => $item->name,
             'quantity' => $item->quantity,
             'completed' => (bool) $item->completed,
+            'is_out_of_stock' => (bool) $item->is_out_of_stock,
             'completed_by' => $item->completedBy ? [
                 'id' => $item->completedBy->id,
                 'name' => $item->completedBy->name,

@@ -11,6 +11,11 @@ use Illuminate\Support\Facades\Route;
 Route::post('/auth/register', [AuthController::class, 'register']);
 Route::post('/auth/login', [AuthController::class, 'login']);
 
+// Legal and Info endpoints
+Route::get('/privacy-policy', [\App\Http\Controllers\Api\PageController::class, 'privacy']);
+Route::get('/terms-and-conditions', [\App\Http\Controllers\Api\PageController::class, 'terms']);
+Route::get('/faqs', [\App\Http\Controllers\Api\PageController::class, 'faq']);
+
 // Join list by code (no login): returns list + guest access_token for that list
 Route::post('/lists/join-code', [ListController::class, 'joinByCode']);
 
@@ -53,7 +58,9 @@ Route::middleware('auth:sanctum')->group(function () {
 // List view + items + reset: allow Sanctum user OR guest token (from join-code)
 Route::middleware('list.access.api')->group(function () {
     Route::get('/lists/{list}', [ListController::class, 'show']);
+    Route::get('/lists/{list}/predictive-suggestions', [\App\Http\Controllers\SuggestionController::class, 'predictiveSuggestions']);
     Route::get('/lists/{list}/settlement', [ListController::class, 'settlement']);
+    Route::post('/lists/{list}/leave', [ListController::class, 'leave']);
     Route::post('/lists/{list}/ping', [ListController::class, 'ping']);
     Route::post('/lists/{list}/reset-items', [ListController::class, 'resetItems']);
     Route::post('/lists/{list}/items', [ListItemController::class, 'store']);
@@ -61,7 +68,12 @@ Route::middleware('list.access.api')->group(function () {
     Route::match(['put', 'patch'], '/lists/{list}/items/{item}', [ListItemController::class, 'update']);
     Route::post('/lists/{list}/items/{item}/claim', [ListItemController::class, 'claim']);
     Route::post('/lists/{list}/items/{item}/unclaim', [ListItemController::class, 'unclaim']);
+    Route::post('/lists/{list}/items/{item}/out-of-stock', [ListItemController::class, 'toggleOutOfStock']);
     Route::delete('/lists/{list}/items/{item}', [ListItemController::class, 'destroy']);
+
+    // Item Chat
+    Route::get('/lists/{list}/items/{item}/messages', [\App\Http\Controllers\Api\ItemMessageController::class, 'index']);
+    Route::post('/lists/{list}/items/{item}/messages', [\App\Http\Controllers\Api\ItemMessageController::class, 'store']);
 
     // Payments
     Route::get('/lists/{list}/payments', [\App\Http\Controllers\Api\ListPaymentController::class, 'index']);

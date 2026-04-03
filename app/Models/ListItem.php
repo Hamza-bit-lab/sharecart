@@ -25,10 +25,12 @@ class ListItem extends Model
         'claimed_by_user_id',
         'claimed_by_name',
         'claimed_at',
+        'is_out_of_stock',
     ];
 
     protected $casts = [
         'completed' => 'boolean',
+        'is_out_of_stock' => 'boolean',
         'completed_at' => 'datetime',
         'claimed_at' => 'datetime',
     ];
@@ -55,5 +57,13 @@ class ListItem extends Model
     public function claimedByUser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'claimed_by_user_id');
+    }
+
+    /**
+     * The messages in this item's specific mini-chat.
+     */
+    public function messages(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(ItemMessage::class);
     }
 }

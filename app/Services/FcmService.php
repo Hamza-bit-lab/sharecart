@@ -76,19 +76,30 @@
              if ($report->hasFailures()) {
                  foreach ($report->failures()->getItems() as $failure) {
                      $token = $failure->target()->value();
-                     $reason = $failure->error() ? $failure->error()->getMessage() : 'Unknown error';
+                     $error = $failure->error();
+                     $reason = $error ? $error->getMessage() : 'Unknown error';
+                     
+                     $responseBody = null;
+                     if ($error && method_exists($error, 'response') && $error->response()) {
+                         $responseBody = (string) $error->response()->getBody();
+                     }
                      
                      // If token is invalid or unregistered, remove it
                      if ($failure->messageWasSentToUnknownToken() || $failure->messageTargetWasInvalid()) {
                          FcmToken::where('token', $token)->delete();
-                         Log::info("Removed invalid FCM token: {$token}. Reason: {$reason}");
+                         Log::info("Removed invalid FCM token: {$token}. Reason: {$reason}", [
+                             'response' => $responseBody
+                         ]);
                      } else {
-                         Log::warning("FCM send failure for token {$token}: {$reason}");
+                         Log::warning("FCM send failure for token {$token}: {$reason}", [
+                             'response' => $responseBody
+                         ]);
                      }
                  }
              }
          } catch (MessagingException | AuthenticationError $e) {
-             Log::error("Firebase Messaging error: " . $e->getMessage());
+             $responseBody = method_exists($e, 'response') && $e->response() ? (string) $e->response()->getBody() : null;
+             Log::error("Firebase Messaging error: " . $e->getMessage(), ['response' => $responseBody]);
          } catch (\Exception $e) {
              Log::error("General error sending FCM: " . $e->getMessage());
          }
