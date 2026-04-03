@@ -168,7 +168,7 @@ class ListController extends Controller
     public function leave(Request $request, GroceryList $list): JsonResponse
     {
         if ($request->user()) {
-            if ($list->user_id === $request->user()->id) {
+            if ($list->user_id == $request->user()->id) {
                 return ApiResponse::error('Owner cannot leave the list.', 403);
             }
             $list->sharedWith()->detach($request->user()->id);
