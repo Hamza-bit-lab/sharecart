@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\ListItemController;
 use App\Http\Controllers\SuggestionController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\BookController;
 
 // Public auth APIs
 Route::post('/auth/register', [AuthController::class, 'register']);
@@ -81,3 +82,9 @@ Route::middleware('list.access.api')->group(function () {
     Route::match(['put', 'patch'], '/lists/{list}/payments/{payment}', [\App\Http\Controllers\Api\ListPaymentController::class, 'update']);
     Route::delete('/lists/{list}/payments/{payment}', [\App\Http\Controllers\Api\ListPaymentController::class, 'destroy']);
 });
+
+
+
+//book app
+Route::get('/book-version', [BookController::class, 'getVersion']);
+Route::post('/book-update-version', [BookController::class, 'updateVersion']);

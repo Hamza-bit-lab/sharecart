@@ -44,7 +44,7 @@ class ListItemController extends Controller
      */
     public function update(Request $request, GroceryList $list, ListItem $item): JsonResponse
     {
-        if ($item->list_id !== $list->id) {
+        if ($item->list_id != $list->id) {
             return ApiResponse::error('Item does not belong to this list.', 404);
         }
 
@@ -91,7 +91,7 @@ class ListItemController extends Controller
      */
     public function destroy(Request $request, GroceryList $list, ListItem $item): JsonResponse
     {
-        if ($item->list_id !== $list->id) {
+        if ($item->list_id != $list->id) {
             return ApiResponse::error('Item does not belong to this list.', 404);
         }
 
@@ -112,7 +112,7 @@ class ListItemController extends Controller
      */
     public function claim(Request $request, GroceryList $list, ListItem $item): JsonResponse
     {
-        if ($item->list_id !== $list->id) {
+        if ($item->list_id != $list->id) {
             return ApiResponse::error('Item does not belong to this list.', 404);
         }
 
@@ -146,7 +146,7 @@ class ListItemController extends Controller
      */
     public function unclaim(Request $request, GroceryList $list, ListItem $item): JsonResponse
     {
-        if ($item->list_id !== $list->id) {
+        if ($item->list_id != $list->id) {
             return ApiResponse::error('Item does not belong to this list.', 404);
         }
 
@@ -174,7 +174,7 @@ class ListItemController extends Controller
      */
     public function toggleOutOfStock(Request $request, GroceryList $list, ListItem $item, \App\Services\FcmService $fcmService): JsonResponse
     {
-        if ($item->list_id !== $list->id) {
+        if ($item->list_id != $list->id) {
             return ApiResponse::error('Item does not belong to this list.', 404);
         }
 
